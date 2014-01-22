@@ -1,63 +1,76 @@
-$(function(){
-    var api_url = '/api/';
-    var products = {'B2G': 'Firefox OS',
-                    'Firefox': 'Firefox Desktop',
-                    'FennecAndroid': 'Fennec Android',
-                    'MetroFirefox': 'Firefox Metro',
-                    'Thunderbird': 'Thunderbird',
-                    'SeaMonkey': 'SeaMonkey'}
-    $.getJSON(api_url + 'CurrentVersions', function(payload) {
-        var featured = {};
-        $.each(payload, function(idx, release) {
-            if (release.featured) {
-                if (release.product in products) {
-                    if (release.product in featured) {
-                        featured[release.product].push(release.version);
-                    } else {
-                        featured[release.product] = [release.version];
-                    }
-                }
+var api_url = '/api/';
+var products = d3.map({
+    'B2G': 'Firefox OS',
+    'Firefox': 'Firefox Desktop',
+    'FennecAndroid': 'Fennec Android',
+    'MetroFirefox': 'Firefox Metro',
+    'Thunderbird': 'Thunderbird',
+    'SeaMonkey': 'SeaMonkey'
+});
+
+
+d3.json(api_url + 'CurrentVersions', function(payload) {
+    var featured = {};
+    d3.map(payload)
+        .forEach(function(idx, release) {
+            if (!release.featured) {
+                return
+            }
+            if (!release.product in products) {
+                return;
+            }
+            if (release.product in featured) {
+                featured[release.product].push(release.version);
+            } else {
+                featured[release.product] = [release.version];
             }
         });
-        for (product in products) {
-            var versions = featured[product];
-            var productName = products[product];
-            var sparklines = '';
-            for (i in versions) {
-                var version = versions[i].replace('.', '_', 'g');
-                var channel = channelFromVersion(version);
-                sparklines += '<p title="' + versions[i] +'" class="spark">' +
-                           '<span class="spark" id="sparkline-' +
-                           product + '-' + version + '"></span>' + channel +
-                            '</p>';
-            }
 
-            $('#product-list')
-                .append('<a ' +
-                        'href="https://crash-stats.allizom.org/home/products/' +                        product + '">' +
-                        '<li>' +
-                        '<img src="/static/' + product + '.png">' +
-                        productName + '<br>' +
-                        sparklines +
-                        '</li>' +
-                        '</a>');
-            crashesPerAdu(product, versions);
+    var divs = d3.select('.container')
+        .selectAll('div')
+        .data(products.keys())
+      .enter().append('div')
+        .classed('product', true);
+
+    divs.append('img')
+        .attr('src', function(d) { return "/static/" + d + '.png'; });
+
+    divs.append('div')
+        .classed('supplemental-info', true)
+        .append('ul')
+        .selectAll('li')
+        .data(function(d) {
+            return featured[d].map(function(version) {
+                return channelFromVersion(version.replace('.', '_', 'g'));
+            });
+        })
+      .enter().append('li')
+        .classed('sparklines', true)
+        .text(function(d) { return d; });
+
+    //crashesPerAdu(product, versions);
+});
+
+function crashesPerAdu(product, versions) {
+    // FIXME hardcoded from_date
+    var url = api_url + 'CrashesPerAdu/?product=' + product +
+        '&from_date=2014-01-01&versions=' + versions.join('&versions=');
+    d3.json(url, function(payload) {
+        if (!payload) {
+            console.log('payload is falsy');
+            return;
         }
-    });
-
-    function crashesPerAdu(product, versions) {
-        // FIXME hardcoded from_date
-        var url = api_url + 'CrashesPerAdu/?product=' + product +
-            '&from_date=2014-01-01&versions=' + versions.join('&versions=');
-        $.getJSON(url, function(payload) {
-            var results = {};
-            $.each(payload.hits, function(productVersion, data) {
+        var results = {};
+        d3.map(payload.hits)
+            .forEach(function(productVersion, data) {
                 var version = productVersion.split(':')[1];
                 version = version.replace('.', '_', 'g');
                 var series = [];
-                $.each(data, function(date, raw) {
-                    series.push(raw.crash_hadu);
-                })
+                d3.map(data)
+                    .forEach(function(date, raw) {
+                        series.push(raw.crash_hadu);
+                    });
+
                 var channel = channelFromVersion(version);
                 var color = '';
                 if (channel == 'nightly') {
@@ -69,25 +82,31 @@ $(function(){
                 } else {
                     color = 'green';
                 }
-                $('#sparkline-' + product + '-' + version).sparkline(series,
-                    { lineColor: color,
-                      fillColor: false,
-                      disableInteraction: true });
-            });
+
+                /*
+                d3.select('#sparkline-' + product + '-' + version)
+                    .sparkline(
+                        series,
+                        {
+                            lineColor: color,
+                            fillColor: false,
+                            disableInteraction: true
+                        }
+                    );
+                */
         });
+    });
+}
+
+function channelFromVersion(version) {
+    if (version.indexOf('a1') != -1) {
+        return 'nightly';
     }
-
-    function channelFromVersion(version) {
-        var channel = 'release';
-
-        if (version.indexOf('a1') != -1) {
-            channel = 'nightly';
-        } else if (version.indexOf('a2') != -1) {
-            channel = 'aurora';
-        } else if (version.indexOf('b') != -1) {
-            channel = 'beta';
-        }
-
-        return channel;
+    if (version.indexOf('a2') != -1) {
+        return 'aurora';
     }
-});
+    if (version.indexOf('b') != -1) {
+        return 'beta';
+    }
+    return 'release';
+}
