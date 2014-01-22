@@ -46,9 +46,11 @@ d3.json(api_url + 'CurrentVersions', function(payload) {
         })
       .enter().append('li')
         .classed('sparklines', true)
-        .text(function(d) { return d; });
+        .text(function(d) { return d; })
+        .append('div')
+        .classed('sparklines', true);
 
-    //crashesPerAdu(product, versions);
+    crashesPerAdu(product, versions);
 });
 
 function crashesPerAdu(product, versions) {
@@ -82,6 +84,10 @@ function crashesPerAdu(product, versions) {
                 } else {
                     color = 'green';
                 }
+
+                d3.selectAll('.sparkline')
+                    .data()
+
 
                 /*
                 d3.select('#sparkline-' + product + '-' + version)
